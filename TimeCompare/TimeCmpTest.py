@@ -11,11 +11,13 @@ import numpy as np
 #          3. A-B的间隔天数分布, B-C的间隔天数分布, A-C的间隔天数分布
 # （以上分析均需排除A/B/C均为一天的顾客）
 
+
 # define A>C: 1, A<C: 2
 # define B>C: 3, B<C: 4
 
 zeroTime = pd.Timedelta('0 days 0:0:00')
-
+th_days = 90
+daily_seconds = 86400
 class cust:
     def __init__(self, customerid, follow_time, sign_up_time, first_purchase_time):
         self.customerid = customerid
@@ -40,16 +42,19 @@ class cust:
             self.customer_categrayBC = False
 
     def delat_AB_follow_sign_up(self):
-        delta_days = (self.follow_time - self.sign_up_time).days
-        return delta_days+2
+        delta = self.follow_time - self.sign_up_time
+        delta_days = (delta.days * daily_seconds + delta.seconds) / daily_seconds
+        return delta_days
 
     def delta_BC_sign_up_first_purchase(self):
-        delta_days = (self.sign_up_time - self.first_purchase_time).days
-        return delta_days+2
+        delta = self.sign_up_time - self.first_purchase_time
+        delta_days = (delta.days * daily_seconds + delta.seconds) / daily_seconds
+        return delta_days
 
     def delta_AC_follow_first_purchase(self):
-        delta_days = (self.follow_time - self.first_purchase_time).days
-        return delta_days+2
+        delta = self.follow_time - self.first_purchase_time
+        delta_days = (delta.days * daily_seconds + delta.seconds) / daily_seconds
+        return delta_days
 
 
 class cust_group:
@@ -82,32 +87,34 @@ class cust_group:
     def get_AB_delat_days(self):
         days = list()
         for person in self.customers:
-            days.append(person.delat_AB_follow_sign_up())
+            nday = person.delat_AB_follow_sign_up()
+            if abs(nday) < th_days:
+                days.append(nday)
         days = np.array(days)
         return days
 
     def get_BC_delta_days(self):
         days = list()
         for person in self.customers:
-            days.append(person.delta_BC_sign_up_first_purchase())
+            nday = person.delta_BC_sign_up_first_purchase()
+            if abs(nday) < th_days:
+                days.append(nday)
         days = np.array(days)
         return days
 
     def get_AC_delta_days(self):
         days = list()
         for person in self.customers:
-            days.append(person.delta_AC_follow_first_purchase())
+            nday = person.delta_AC_follow_first_purchase()
+            if abs(nday) < th_days:
+                days.append(nday)
         days = np.array(days)
         return days
 
 
-
-
-
-def write_excels(a, filename):
-    data_pd = pd.DataFrame(a)
+def write_excels(data_pd, filename):
     file = pd.ExcelWriter(filename)
-    data_pd.to_excel(file, 'sheet1', float_format='%.5f', index=False, header=None)
+    data_pd.to_excel(file, 'sheet1', float_format='%.5f', index=True, header=None)
     file.save()
 
 filename = 'sumi.xlsx'
@@ -122,32 +129,43 @@ customers = cust_group(customerid, follow_time, sign_up_time, first_purch_time)
 AC_NUM, CA_NUM = customers.get_AC_distribution()
 BC_NUM, CB_NUM = customers.get_BC_distribution()
 
-days_BC = customers.get_BC_delta_days()
+print('先关注再购买的顾客数:', AC_NUM)
+print('先购买在关注的顾客数:', CA_NUM)
+
+print('先注册再购买的顾客数:', BC_NUM)
+print('先购买再注册的顾客数:', CB_NUM)
+
 days_AB = customers.get_AB_delat_days()
+days_BC = customers.get_BC_delta_days()
 days_AC = customers.get_AC_delta_days()
 
-print(AC_NUM, CA_NUM)
-print(BC_NUM, CB_NUM)
-
-write_excels(days_AB, 'ABtest.xlsx')
-write_excels(days_BC, 'BCtest.xlsx')
-write_excels(days_AC, 'ACtest.xlsx')
-
-days_AB = pd.DataFrame(days_AC)
+days_AB = pd.DataFrame(days_AB)
 days_BC = pd.DataFrame(days_BC)
 days_AC = pd.DataFrame(days_AC)
-ab = days_AB.dropna()
-bc = days_BC.dropna()
-ac = days_AC.dropna()
-print(len(ab))
-print(len(bc))
-print(len(ac))
+
+ab = days_AB.dropna().astype(int)
+bc = days_BC.dropna().astype(int)
+ac = days_AC.dropna().astype(int)
+
+result_ab = ab.apply(pd.value_counts)
+result_bc = bc.apply(pd.value_counts)
+result_ac = ac.apply(pd.value_counts)
+
+print(result_ab)
+print(type(result_ab))
+
+write_excels(result_ab, 'A-B.xlsx')
+write_excels(result_bc, 'B-C.xlsx')
+write_excels(result_ac, 'A-C.xlsx')
+# print(len(ab))
+# print(len(bc))
+# print(len(ac))
 # bc = sns.distplot(days_BC, rug=True, hist=False)
-sns.distplot(ab, rug=True, hist=False)
+sns.distplot(ab, rug=True, hist=True)
 plt.show()
-sns.distplot(ab, rug=True, hist=False)
+sns.distplot(bc, rug=True, hist=False)
 plt.show()
-sns.distplot(ab, rug=True, hist=False)
+sns.distplot(ac, rug=True, hist=False)
 plt.show()
 
 # for index in range(len(days_AB)):
